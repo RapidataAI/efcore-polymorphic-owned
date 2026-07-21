@@ -2,60 +2,60 @@ using Microsoft.EntityFrameworkCore;
 using PolymorphicOwned.Sample;
 
 // Round-trips the motivating example against Postgres:
-//   Order { Discount: PercentageDiscount | FixedAmountDiscount }
+//   Audience { GraduationRule: ScoreThresholdRule | TaskAccuracyRule }
 // Set POSTGRES_CONNECTION to point at your database (defaults to localhost:5432).
 
-await using var db = new OrderDbContext(SampleOptions.Build().Options);
+await using var db = new AudienceDbContext(SampleOptions.Build().Options);
 
 await db.Database.MigrateAsync();
-await db.Orders.ExecuteDeleteAsync();
+await db.Audiences.ExecuteDeleteAsync();
 
-db.Orders.AddRange(
-    new Order
+db.Audiences.AddRange(
+    new Audience
     {
-        Reference = "ORD-1001",
-        Discount = new PercentageDiscount
+        Name = "Reliable reviewers",
+        GraduationRule = new ScoreThresholdRule
         {
-            Percentage = 15,
-            MaxAmount = 50,
-            MinItems = 3,
+            GraduationScore = 0.85,
+            DemotionScore = 0.4,
+            MinResponsesToGraduate = 50,
         },
     },
-    new Order
+    new Audience
     {
-        Reference = "ORD-1002",
-        Discount = new FixedAmountDiscount
+        Name = "Accurate labelers",
+        GraduationRule = new TaskAccuracyRule
         {
-            Amount = 20,
-            MinOrderTotal = 100,
-            MaxRedemptions = 1000,
+            TargetAccuracy = 0.95,
+            MinTasks = 20,
+            MaxTasks = 200,
         },
     });
 
 await db.SaveChangesAsync();
 
 // Fresh context so nothing is served from the identity map — this proves materialization.
-await using var readContext = new OrderDbContext(SampleOptions.Build().Options);
-var orders = await readContext.Orders.OrderBy(o => o.Id).ToListAsync();
+await using var readContext = new AudienceDbContext(SampleOptions.Build().Options);
+var audiences = await readContext.Audiences.OrderBy(a => a.Id).ToListAsync();
 
-foreach (var order in orders)
+foreach (var audience in audiences)
 {
-    var description = order.Discount switch
+    var description = audience.GraduationRule switch
     {
-        PercentageDiscount percentage =>
-            $"PercentageDiscount({percentage.Percentage}% up to {percentage.MaxAmount}, minItems={percentage.MinItems})",
-        FixedAmountDiscount fixedAmount =>
-            $"FixedAmountDiscount({fixedAmount.Amount} off over {fixedAmount.MinOrderTotal}, maxRedemptions={fixedAmount.MaxRedemptions})",
-        _ => order.Discount.GetType().Name,
+        ScoreThresholdRule score =>
+            $"ScoreThresholdRule(graduate>={score.GraduationScore}, demote<{score.DemotionScore}, minResponses={score.MinResponsesToGraduate})",
+        TaskAccuracyRule accuracy =>
+            $"TaskAccuracyRule(target={accuracy.TargetAccuracy}, tasks {accuracy.MinTasks}..{accuracy.MaxTasks})",
+        _ => audience.GraduationRule.GetType().Name,
     };
 
-    Console.WriteLine($"#{order.Id} {order.Reference,-10} -> {description}");
+    Console.WriteLine($"#{audience.Id} {audience.Name,-20} -> {description}");
 }
 
 // Server-side filter on a flattened column (see the query-limitation caveat in the README).
-var bigPercentageOff = await readContext.Orders
-    .Where(o => EF.Property<double?>(o, "Percentage") >= 10)
-    .Select(o => o.Reference)
+var strictScoreGates = await readContext.Audiences
+    .Where(a => EF.Property<double?>(a, "GraduationScore") >= 0.8)
+    .Select(a => a.Name)
     .ToListAsync();
 
-Console.WriteLine($"Orders with a percentage discount >= 10%: {string.Join(", ", bigPercentageOff)}");
+Console.WriteLine($"Audiences with a graduation score >= 0.8: {string.Join(", ", strictScoreGates)}");

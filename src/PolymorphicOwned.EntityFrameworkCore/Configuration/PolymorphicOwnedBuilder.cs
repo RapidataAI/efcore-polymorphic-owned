@@ -31,7 +31,7 @@ public sealed class PolymorphicOwnedBuilder<TValue>
 
     /// <summary>
     /// Sets the discriminator column/property name. Defaults to <c>&lt;property&gt;_type</c>
-    /// (e.g. <c>Discount_type</c>, snake-cased to <c>discount_type</c> when a
+    /// (e.g. <c>GraduationRule_type</c>, snake-cased to <c>graduation_rule_type</c> when a
     /// naming-convention plugin is active).
     /// </summary>
     public PolymorphicOwnedBuilder<TValue> HasDiscriminatorColumn(string name)
@@ -62,7 +62,7 @@ public sealed class PolymorphicOwnedBuilder<TValue>
 
     /// <summary>
     /// Configures the column for a specific subtype member, e.g.
-    /// <c>poly.Property(d =&gt; ((PercentageDiscount)d).MaxAmount).HasColumnName("max_discount_amount")</c>.
+    /// <c>poly.Property(r =&gt; ((ScoreThresholdRule)r).GraduationScore).HasColumnName("graduation_score")</c>.
     /// </summary>
     public PolymorphicMemberBuilder Property(Expression<Func<TValue, object?>> memberSelector)
     {
@@ -234,7 +234,7 @@ public sealed class PolymorphicOwnedBuilder<TValue>
         if (body is not MemberExpression memberExpression)
         {
             throw new ArgumentException(
-                "Expression must select a subtype member, e.g. d => ((PercentageDiscount)d).MaxAmount.",
+                "Expression must select a subtype member, e.g. r => ((ScoreThresholdRule)r).GraduationScore.",
                 nameof(selector));
         }
 

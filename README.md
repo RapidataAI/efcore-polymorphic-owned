@@ -43,30 +43,30 @@ is needed to restore.
 ## The problem
 
 EF Core supports inheritance for **entities** (TPH/TPT/TPC) but **not** for **owned or complex
-types**. So a value object like this:
+types**. So a value object like this (the base may be an interface **or** an abstract class):
 
 ```csharp
-public interface IDiscount;
+public abstract class GraduationRule;
 
-public sealed class PercentageDiscount : IDiscount
+public sealed class ScoreThresholdRule : GraduationRule
 {
-    public double Percentage { get; set; }
-    public double MaxAmount { get; set; }
-    public int MinItems { get; set; }
+    public double GraduationScore { get; set; }
+    public double DemotionScore { get; set; }
+    public int MinResponsesToGraduate { get; set; }
 }
 
-public sealed class FixedAmountDiscount : IDiscount
+public sealed class TaskAccuracyRule : GraduationRule
 {
-    public double Amount { get; set; }
-    public double MinOrderTotal { get; set; }
-    public int MaxRedemptions { get; set; }
+    public double TargetAccuracy { get; set; }
+    public int MinTasks { get; set; }
+    public int MaxTasks { get; set; }
 }
 
-public sealed class Order
+public sealed class Audience
 {
     public int Id { get; set; }
-    public string Reference { get; set; } = "";
-    public IDiscount Discount { get; set; } = default!;   // 1:1 owned, polymorphic
+    public string Name { get; set; } = "";
+    public GraduationRule GraduationRule { get; set; } = default!;   // 1:1 owned, polymorphic
 }
 ```
 
@@ -86,16 +86,16 @@ public sealed class Order
 Configure the mapping in `OnModelCreating`:
 
 ```csharp
-modelBuilder.Entity<Order>()
-    .OwnsPolymorphic(o => o.Discount, poly =>
+modelBuilder.Entity<Audience>()
+    .OwnsPolymorphic(a => a.GraduationRule, poly =>
     {
-        poly.HasDiscriminatorColumn("discount_type");   // default: "<prop>_type"
-        poly.HasDerivedType<PercentageDiscount>("percentage");
-        poly.HasDerivedType<FixedAmountDiscount>("fixed_amount");
+        poly.HasDiscriminatorColumn("graduation_rule_type");   // default: "<prop>_type"
+        poly.HasDerivedType<ScoreThresholdRule>("score_threshold");
+        poly.HasDerivedType<TaskAccuracyRule>("task_accuracy");
 
         // Column names default to convention (and cooperate with EFCore.NamingConventions).
         // Override individually if you like:
-        poly.Property(d => ((PercentageDiscount)d).MaxAmount).HasColumnName("max_discount_amount");
+        poly.Property(r => ((ScoreThresholdRule)r).GraduationScore).HasColumnName("graduation_score");
     });
 ```
 
@@ -111,25 +111,24 @@ optionsBuilder
 That's it. Insert and read value objects as their concrete types:
 
 ```csharp
-db.Orders.Add(new Order
+db.Audiences.Add(new Audience
 {
-    Reference = "ORD-1001",
-    Discount = new PercentageDiscount { Percentage = 15, MaxAmount = 50, MinItems = 3 },
+    Name = "Reliable reviewers",
+    GraduationRule = new ScoreThresholdRule { GraduationScore = 0.85, DemotionScore = 0.4, MinResponsesToGraduate = 50 },
 });
 await db.SaveChangesAsync();
 
-var order = await db.Orders.SingleAsync(o => o.Reference == "ORD-1001");
-if (order.Discount is PercentageDiscount percentage)
+var audience = await db.Audiences.SingleAsync(a => a.Name == "Reliable reviewers");
+if (audience.GraduationRule is ScoreThresholdRule score)
 {
-    Console.WriteLine(percentage.Percentage);   // 15
+    Console.WriteLine(score.GraduationScore);   // 0.85
 }
 ```
 
-The `orders` table ends up with exactly these columns — no separate table, no JSON
-(`max_amount` is shown as `max_discount_amount` if you use the `HasColumnName` override above):
+The `audiences` table ends up with exactly these columns — no separate table, no JSON:
 
-| id | reference | discount_type | percentage | max_amount | min_items | amount | min_order_total | max_redemptions |
-|----|-----------|---------------|------------|------------|-----------|--------|-----------------|-----------------|
+| id | name | graduation_rule_type | graduation_score | demotion_score | min_responses_to_graduate | target_accuracy | min_tasks | max_tasks |
+|----|------|----------------------|------------------|----------------|---------------------------|-----------------|-----------|-----------|
 
 `dotnet ef migrations add` emits every one of those columns with **no hand-editing** — they are
 registered as shadow properties, so they appear in migrations and the model snapshot exactly like
@@ -150,8 +149,8 @@ hand-written columns.
 one subtype's columns are populated per row.
 
 **Shared members.** By default a member that appears on more than one subtype maps to
-subtype-qualified columns (`PercentageDiscount_Foo`, `FixedAmountDiscount_Foo`). Call
-`CollapseSharedMembers()` to fold same-name-and-type members into a single column.
+subtype-qualified columns (`SubtypeA_Foo`, `SubtypeB_Foo`). Call `CollapseSharedMembers()` to fold
+same-name-and-type members into a single column.
 
 **Activation.** Subtypes are reconstructed via a constructor whose parameters match member names
 (records / immutable value objects), otherwise via a parameterless constructor and property setters.
@@ -160,7 +159,7 @@ Get-only auto-properties are supported (written through the backing field).
 ## Querying: the hard boundary
 
 **v1 does not translate the reconstructed object in LINQ.** EF cannot translate
-`o.Discount is FixedAmountDiscount` or member access on the polymorphic property to SQL — the
+`a.GraduationRule is TaskAccuracyRule` or member access on the polymorphic property to SQL — the
 value object only exists after materialization.
 
 What you **can** do is filter, sort, and project against the flattened columns server-side, because
@@ -168,18 +167,18 @@ they are real (shadow) properties:
 
 ```csharp
 // Translated to SQL against the real column. Rows of other subtypes have a NULL there.
-var bigPercentageOff = await db.Orders
-    .Where(o => EF.Property<double?>(o, "Percentage") >= 10)
+var strictScoreGates = await db.Audiences
+    .Where(a => EF.Property<double?>(a, "GraduationScore") >= 0.8)
     .ToListAsync();
 
 // The discriminator is queryable too:
-var fixedDiscounts = await db.Orders
-    .Where(o => EF.Property<string>(o, "discount_type") == "fixed_amount")
+var accuracyGated = await db.Audiences
+    .Where(a => EF.Property<string>(a, "graduation_rule_type") == "task_accuracy")
     .ToListAsync();
 ```
 
-`EF.Property<T>(entity, name)` takes the **property name** (the member name, e.g. `Percentage`),
-which maps to the configured/conventioned column (`percentage`). Strongly-typed query helpers
+`EF.Property<T>(entity, name)` takes the **property name** (the member name, e.g. `GraduationScore`),
+which maps to the configured/conventioned column (`graduation_score`). Strongly-typed query helpers
 are a stretch goal, not part of v1.
 
 ## Non-goals
@@ -193,7 +192,7 @@ are a stretch goal, not part of v1.
 ## Runnable sample
 
 [`samples/PolymorphicOwned.Sample`](samples/PolymorphicOwned.Sample) models exactly
-`Order { Discount: PercentageDiscount | FixedAmountDiscount }` against PostgreSQL, including a
+`Audience { GraduationRule: ScoreThresholdRule | TaskAccuracyRule }` against PostgreSQL, including a
 committed auto-generated migration.
 
 ```bash
@@ -207,9 +206,9 @@ dotnet run --project samples/PolymorphicOwned.Sample
 Output:
 
 ```
-#1 ORD-1001   -> PercentageDiscount(15% up to 50, minItems=3)
-#2 ORD-1002   -> FixedAmountDiscount(20 off over 100, maxRedemptions=1000)
-Orders with a percentage discount >= 10%: ORD-1001
+#1 Reliable reviewers   -> ScoreThresholdRule(graduate>=0.85, demote<0.4, minResponses=50)
+#2 Accurate labelers    -> TaskAccuracyRule(target=0.95, tasks 20..200)
+Audiences with a graduation score >= 0.8: Reliable reviewers
 ```
 
 ## Why this exists

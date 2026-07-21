@@ -12,23 +12,23 @@ namespace PolymorphicOwned.Sample.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "orders",
+                name: "audiences",
                 columns: table => new
                 {
                     id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    reference = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    amount = table.Column<double>(type: "double precision", nullable: true),
-                    max_amount = table.Column<double>(type: "double precision", nullable: true),
-                    max_redemptions = table.Column<int>(type: "integer", nullable: true),
-                    min_items = table.Column<int>(type: "integer", nullable: true),
-                    min_order_total = table.Column<double>(type: "double precision", nullable: true),
-                    percentage = table.Column<double>(type: "double precision", nullable: true),
-                    discount_type = table.Column<string>(type: "text", nullable: false)
+                    name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    demotion_score = table.Column<double>(type: "double precision", nullable: true),
+                    graduation_score = table.Column<double>(type: "double precision", nullable: true),
+                    max_tasks = table.Column<int>(type: "integer", nullable: true),
+                    min_responses_to_graduate = table.Column<int>(type: "integer", nullable: true),
+                    min_tasks = table.Column<int>(type: "integer", nullable: true),
+                    target_accuracy = table.Column<double>(type: "double precision", nullable: true),
+                    graduation_rule_type = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_orders", x => x.id);
+                    table.PrimaryKey("pk_audiences", x => x.id);
                 });
         }
 
@@ -36,7 +36,7 @@ namespace PolymorphicOwned.Sample.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "orders");
+                name: "audiences");
         }
     }
 }

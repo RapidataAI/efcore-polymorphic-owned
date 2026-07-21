@@ -67,8 +67,9 @@ jobs:
           gen=$(ls samples/PolymorphicOwned.Sample/Migrations/*_CiScaffoldCheck.cs)
           echo "Generated: $gen"
           # Columns appear as anonymous-type member identifiers (col = table.Column<...>), not quoted.
-          for col in discount_type percentage max_amount min_items \
-                     amount min_order_total max_redemptions; do
+          for col in graduation_rule_type \
+                     graduation_score demotion_score min_responses_to_graduate \
+                     target_accuracy min_tasks max_tasks; do
             grep -qw "$col" "$gen" || { echo "MISSING column: $col"; exit 1; }
           done
           echo "All polymorphic columns present in the auto-generated migration."

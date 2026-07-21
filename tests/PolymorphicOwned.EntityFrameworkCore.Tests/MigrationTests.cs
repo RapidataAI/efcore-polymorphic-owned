@@ -20,57 +20,57 @@ public sealed class MigrationTests(PostgresFixture postgres) : DatabaseTestBase(
     [Fact]
     public void Snake_case_emits_the_motivating_example_columns()
     {
-        var columns = OrderTableColumns(snakeCase: true);
+        var columns = AudienceTableColumns(snakeCase: true);
 
         columns.Keys.ShouldBe(
             new[]
             {
-                "id", "reference",
-                "discount_type",
-                "percentage", "max_amount", "min_items",
-                "amount", "min_order_total", "max_redemptions",
+                "id", "name",
+                "graduation_rule_type",
+                "graduation_score", "demotion_score", "min_responses_to_graduate",
+                "target_accuracy", "min_tasks", "max_tasks",
             },
             ignoreOrder: true);
 
         // Discriminator is non-null (required owner); every subtype-specific column is nullable.
-        columns["discount_type"].IsNullable.ShouldBeFalse();
-        columns["percentage"].IsNullable.ShouldBeTrue();
-        columns["max_amount"].IsNullable.ShouldBeTrue();
-        columns["min_items"].IsNullable.ShouldBeTrue();
-        columns["amount"].IsNullable.ShouldBeTrue();
-        columns["min_order_total"].IsNullable.ShouldBeTrue();
-        columns["max_redemptions"].IsNullable.ShouldBeTrue();
+        columns["graduation_rule_type"].IsNullable.ShouldBeFalse();
+        columns["graduation_score"].IsNullable.ShouldBeTrue();
+        columns["demotion_score"].IsNullable.ShouldBeTrue();
+        columns["min_responses_to_graduate"].IsNullable.ShouldBeTrue();
+        columns["target_accuracy"].IsNullable.ShouldBeTrue();
+        columns["min_tasks"].IsNullable.ShouldBeTrue();
+        columns["max_tasks"].IsNullable.ShouldBeTrue();
 
-        UnderlyingType(columns["percentage"]).ShouldBe(typeof(double));
-        UnderlyingType(columns["min_items"]).ShouldBe(typeof(int));
+        UnderlyingType(columns["graduation_score"]).ShouldBe(typeof(double));
+        UnderlyingType(columns["min_responses_to_graduate"]).ShouldBe(typeof(int));
     }
 
     [Fact]
     public void Default_naming_uses_member_names_and_explicit_discriminator()
     {
-        var columns = OrderTableColumns(snakeCase: false);
+        var columns = AudienceTableColumns(snakeCase: false);
 
-        columns.Keys.ShouldContain("discount_type"); // explicit HasDiscriminatorColumn wins
-        columns.Keys.ShouldContain("Percentage");
-        columns.Keys.ShouldContain("MaxRedemptions");
+        columns.Keys.ShouldContain("graduation_rule_type"); // explicit HasDiscriminatorColumn wins
+        columns.Keys.ShouldContain("GraduationScore");
+        columns.Keys.ShouldContain("MaxTasks");
     }
 
     [Fact]
     public void Mapping_is_recorded_on_the_model()
     {
-        using var context = new OrderContext(BuildSqlite<OrderContext>());
+        using var context = new AudienceContext(BuildSqlite<AudienceContext>());
 
         context.Model.FindAnnotation("PolymorphicOwned:Mappings")!.Value
             .ShouldBeOfType<string>()
-            .ShouldContain("discount_type");
+            .ShouldContain("graduation_rule_type");
     }
 
     private static Type UnderlyingType(AddColumnOperation column) =>
         Nullable.GetUnderlyingType(column.ClrType) ?? column.ClrType;
 
-    private Dictionary<string, AddColumnOperation> OrderTableColumns(bool snakeCase)
+    private Dictionary<string, AddColumnOperation> AudienceTableColumns(bool snakeCase)
     {
-        using var context = new OrderContext(BuildSqlite<OrderContext>(snakeCase));
+        using var context = new AudienceContext(BuildSqlite<AudienceContext>(snakeCase));
 
         var differ = context.GetService<IMigrationsModelDiffer>();
         var designModel = context.GetService<IDesignTimeModel>().Model;

@@ -77,7 +77,7 @@ public static class PolymorphicOwnedExtensions
         }
 
         throw new ArgumentException(
-            "The navigation must be a simple property access, e.g. o => o.Discount.",
+            "The navigation must be a simple property access, e.g. a => a.GraduationRule.",
             nameof(navigation));
     }
 }
