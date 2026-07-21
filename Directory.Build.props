@@ -1,0 +1,37 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- Package / repository metadata (applied to packable projects). -->
+  <PropertyGroup>
+    <Authors>Rapidata</Authors>
+    <Company>Rapidata AG</Company>
+    <Product>PolymorphicOwned.EntityFrameworkCore</Product>
+    <Copyright>Copyright (c) 2026 Rapidata AG</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/RapidataAI/efcore-polymorphic-owned</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/RapidataAI/efcore-polymorphic-owned</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <!-- SemVer; overridden by CI from the git tag on release. -->
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <!-- Deterministic builds + symbols for debuggability of shipped packages. -->
+  <PropertyGroup>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+</Project>
