@@ -50,6 +50,9 @@ internal sealed class PolymorphicMapping
 
     public void WriteValue(object owner, object? value) => _navigation.SetValue(owner, value);
 
+    public SubtypeMapping? FindSubtype(Type clrType) =>
+        _byClrType.TryGetValue(clrType, out var subtype) ? subtype : null;
+
     public SubtypeMapping ResolveByInstance(object value)
     {
         var type = value.GetType();

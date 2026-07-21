@@ -79,9 +79,43 @@ ignored property).
 
 **Negative / limits**
 
-- **No LINQ translation of the reconstructed object** (`x.Rule is T`, member access). Querying is
-  against the flattened shadow properties via `EF.Property<T>(...)`. This is the deliberate v1
-  boundary.
+- **No translation of logic run on the reconstructed object** (method calls on it, cast-less member
+  access). Column-mapped forms *do* translate — `((TSub)x.Nav).Member`, `x.Nav is TSub`, and
+  `EF.Property<T>(...)` for filter/sort — and the object can be *projected* (see below); only running
+  arbitrary code against the materialized object inside the query is out of scope.
+- Reconstruction uses reflection. Values are read with a cached closed-generic accessor and subtype
+  activation is planned once per subtype, but it is reflection nonetheless (not compiled delegates).
+- Interceptors are registered explicitly via `UsePolymorphicOwned()`; forgetting it means the value
+  object is never populated or persisted.
+
+### 4. Projection — `IQueryExpressionInterceptor` (added in 0.2.0)
+
+Reading the reconstructed object inside a projection previously forced consumers to either hand-write
+one `EF.Property<T>` per member (verbose, duplicating the mapping) or project the whole owner (over-
+materializing). Accessing the property directly — `o.Discount` in a `Select` — now works: a
+query-expression interceptor rewrites that member access, at query-compilation time, into a
+projection of the discriminator + that mapping's flattened columns (`EF.Property<T>` reads) wrapped
+in a client-side `Rebuild`. EF translates the column reads to SQL and runs the reconstruction in the
+projection shaper, so only the owned value's columns are selected and no entity is tracked. The
+reconstruction logic stays in the library (keyed by a per-mapping id in a small registry) rather than
+being re-implemented per consumer.
+
+Rewriting the raw member access (rather than a dedicated marker method) is safe precisely because the
+navigation is `Ignore`d in the model: EF can never translate `o.Discount` on its own, so there is no
+existing behaviour to collide with — the interceptor is the only thing that gives it meaning.
+
+The same interceptor also rewrites the two query forms that *do* map onto columns, so filtering and
+sorting stay strongly-typed instead of stringly-typed `EF.Property`:
+
+- `((TSub)owner.Nav).Member` → `EF.Property<TShadow>(owner, shadowName)` (the member's column). The
+  result is wrapped back to the member's declared type so surrounding operators keep their types; the
+  cast never executes, so no `InvalidCastException` for other-subtype rows (their column is `NULL`).
+- `owner.Nav is TSub` → `discriminator == "<value>"`.
+
+Both are detected before the projection rewrite so the inner `owner.Nav` isn't turned into a
+reconstruction. What remains out of scope is running logic on the *reconstructed* object in the query
+(method calls, cast-less member access) — that still only exists post-materialization, so the object
+itself is reconstructed only in a final `Select`.
 - Reconstruction uses reflection. Values are read with a cached closed-generic accessor and subtype
   activation is planned once per subtype, but it is reflection nonetheless (not compiled delegates).
 - Interceptors are registered explicitly via `UsePolymorphicOwned()`; forgetting it means the value

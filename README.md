@@ -157,30 +157,80 @@ subtype-qualified columns (`PercentageDiscount_Foo`, `FixedAmountDiscount_Foo`).
 (records / immutable value objects), otherwise via a parameterless constructor and property setters.
 Get-only auto-properties are supported (written through the backing field).
 
-## Querying: the hard boundary
+## Querying
 
-**v1 does not translate the reconstructed object in LINQ.** EF cannot translate
-`o.Discount is FixedAmountDiscount` or member access on the polymorphic property to SQL — the
-value object only exists after materialization.
+### Filter and sort — strongly-typed, on the flattened columns
 
-What you **can** do is filter, sort, and project against the flattened columns server-side, because
-they are real (shadow) properties:
+Cast to a subtype and access a member, or use an `is` check, and it translates to SQL against the
+underlying column — no magic strings:
 
 ```csharp
-// Translated to SQL against the real column. Rows of other subtypes have a NULL there.
+// ((TSub)owner.Nav).Member  ->  the member's column
 var bigPercentageOff = await db.Orders
-    .Where(o => EF.Property<double?>(o, "Percentage") >= 10)
+    .Where(o => ((PercentageDiscount)o.Discount).Percentage >= 10)
+    .OrderByDescending(o => ((PercentageDiscount)o.Discount).Percentage)
     .ToListAsync();
 
-// The discriminator is queryable too:
+// owner.Nav is TSub  ->  the discriminator column
 var fixedDiscounts = await db.Orders
-    .Where(o => EF.Property<string>(o, "discount_type") == "fixed_amount")
+    .Where(o => o.Discount is FixedAmountDiscount)
     .ToListAsync();
 ```
 
-`EF.Property<T>(entity, name)` takes the **property name** (the member name, e.g. `Percentage`),
-which maps to the configured/conventioned column (`percentage`). Strongly-typed query helpers
-are a stretch goal, not part of v1.
+These become plain column predicates (rows of another subtype have a `NULL` in that column, so a
+comparison is simply `false` — the cast never runs, so no `InvalidCastException`):
+
+```sql
+WHERE o.percentage >= 10          -- ((PercentageDiscount)o.Discount).Percentage >= 10
+WHERE o.discount_type = 'fixed_amount'   -- o.Discount is FixedAmountDiscount
+```
+
+The raw shadow properties are also addressable with `EF.Property<T>(o, "Percentage")` if you prefer
+strings, but the cast form above is refactor-safe.
+
+### Project the reconstructed value object
+
+Just access the property in a projection — `o.Discount` — to get the reconstructed value object
+**without materializing the whole owner** and **without a hand-written `EF.Property` per member**:
+
+```csharp
+var items = await db.Orders
+    .Where(o => o.Discount is PercentageDiscount)
+    .Select(o => new OrderListItem
+    {
+        Id = o.Id,
+        Reference = o.Reference,
+        Discount = o.Discount,   // reconstructed, typed
+    })
+    .ToListAsync();
+
+if (items[0].Discount is PercentageDiscount p) { /* ... */ }
+```
+
+The query interceptor (registered by `UsePolymorphicOwned()`) rewrites the `o.Discount` access to
+select the discriminator + that mapping's flattened columns and reconstruct the concrete subtype in
+the projection shaper — so the SQL is just those columns, the owner entity is neither selected in
+full nor tracked, and the mapping knowledge stays in the library. The generated SQL for the `Select`
+above is, e.g.:
+
+```sql
+SELECT o."Id", o."Reference", o.discount_type, o.percentage, o.max_amount, o.min_items,
+       o.amount, o.min_order_total, o.max_redemptions
+FROM orders AS o
+WHERE o.discount_type = 'percentage'
+```
+
+Access the property only in the **final** `Select` projection (it reconstructs client-side, so it
+can't appear inside a `Where`/`OrderBy`). For an optional owner with no value it yields `null`.
+
+### The remaining boundary
+
+What translates to SQL is anything that maps onto the flattened columns: a subtype-member access
+through a cast (`((TSub)o.Nav).Member`), an `is TSub` check, and `EF.Property<T>`. What does **not** is
+running arbitrary logic on the *reconstructed* object inside the query — a method call on it, or a
+member access without a cast (the base type has no members) — because the object only exists after
+materialization. Access via the subtype cast (translated) or project the object and operate on it in
+memory.
 
 ## Non-goals
 

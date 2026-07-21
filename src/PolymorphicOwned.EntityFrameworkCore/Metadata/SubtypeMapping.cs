@@ -36,6 +36,20 @@ internal sealed class SubtypeMapping
     /// <summary>Shadow-property-name -> the binding that reads its value from an instance.</summary>
     public IReadOnlyDictionary<string, MemberBinding> ShadowToMember { get; }
 
+    /// <summary>The shadow property backing a CLR member of this subtype, or null if not flattened.</summary>
+    public string? ShadowNameForMember(string memberName)
+    {
+        foreach (var (shadowName, binding) in ShadowToMember)
+        {
+            if (string.Equals(binding.MemberName, memberName, StringComparison.Ordinal))
+            {
+                return shadowName;
+            }
+        }
+
+        return null;
+    }
+
     public static SubtypeMapping Create(
         Type clrType,
         string discriminatorValue,
