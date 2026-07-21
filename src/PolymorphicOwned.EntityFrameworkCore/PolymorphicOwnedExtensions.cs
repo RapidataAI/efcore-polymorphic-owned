@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PolymorphicOwned.EntityFrameworkCore.Configuration;
 using PolymorphicOwned.EntityFrameworkCore.Interceptors;
+using PolymorphicOwned.EntityFrameworkCore.Query;
 
 namespace PolymorphicOwned.EntityFrameworkCore;
 
@@ -16,6 +17,7 @@ public static class PolymorphicOwnedExtensions
     // service-provider cache (distinct instances would defeat it and trip ManyServiceProvidersCreated).
     private static readonly PolymorphicMaterializationInterceptor MaterializationInterceptor = new();
     private static readonly PolymorphicSaveChangesInterceptor SaveChangesInterceptor = new();
+    private static readonly PolymorphicProjectionInterceptor ProjectionInterceptor = new();
 
     /// <summary>
     /// Maps a polymorphic owned value object (an interface or abstract base with concrete subtypes)
@@ -41,13 +43,15 @@ public static class PolymorphicOwnedExtensions
     }
 
     /// <summary>
-    /// Registers the materialization and save-changes interceptors that read and write the flattened
-    /// polymorphic columns. Call this from <c>OnConfiguring</c> or <c>AddDbContext</c>.
+    /// Registers the interceptors that read, write, and project the flattened polymorphic columns:
+    /// materialization (read), save-changes (flatten on write), and query (rewrites a projection of
+    /// the polymorphic property, e.g. <c>o.Discount</c> in a <c>Select</c>, into a column-only read +
+    /// reconstruction). Call this from <c>OnConfiguring</c> or <c>AddDbContext</c>.
     /// </summary>
     public static DbContextOptionsBuilder UsePolymorphicOwned(this DbContextOptionsBuilder options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return options.AddInterceptors(MaterializationInterceptor, SaveChangesInterceptor);
+        return options.AddInterceptors(MaterializationInterceptor, SaveChangesInterceptor, ProjectionInterceptor);
     }
 
     /// <summary>
