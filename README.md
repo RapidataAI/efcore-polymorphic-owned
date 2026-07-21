@@ -12,9 +12,33 @@ inheritance that EF Core [does not support natively](#why-this-exists).
 Targets **EF Core 8, 9, and 10**. Provider-agnostic core, validated against **PostgreSQL** (Npgsql)
 and **SQLite**.
 
+## Installing
+
+The package is published to the **RapidataAI GitHub Packages** feed on merge to `main` and on
+`v*` tags. Add the feed (a repo-local `NuGet.config`), then reference the package:
+
+```xml
+<!-- NuGet.config -->
+<configuration>
+  <packageSources>
+    <add key="github-rapidata" value="https://nuget.pkg.github.com/RapidataAI/index.json" />
+  </packageSources>
+  <packageSourceCredentials>
+    <github-rapidata>
+      <add key="Username" value="x-access-token" />
+      <!-- A PAT (or Actions GITHUB_TOKEN) with read:packages -->
+      <add key="ClearTextPassword" value="%GITHUB_TOKEN%" />
+    </github-rapidata>
+  </packageSourceCredentials>
+</configuration>
+```
+
 ```
 dotnet add package PolymorphicOwned.EntityFrameworkCore
 ```
+
+Inside RapidataAI CI the ambient `GITHUB_TOKEN` already carries `read:packages`, so no extra secret
+is needed to restore.
 
 ## The problem
 
